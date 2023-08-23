@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -14,12 +16,16 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Dala Foods',
-      theme: ThemeData(
-        primarySwatch: Colors.cyan,
+    return RestorationScope(
+      restorationId: 'root',
+      child: MaterialApp(
+        restorationScopeId: 'app',
+        title: 'Dala Foods',
+        theme: ThemeData(
+          primarySwatch: Colors.cyan,
+        ),
+        home: const MyHomePage(title: 'Dala Foods'),
       ),
-      home: const MyHomePage(title: 'Dala Foods'),
     );
   }
 }
@@ -33,7 +39,8 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _MyHomePageState extends State<MyHomePage>
+    with RestorationMixin<MyHomePage> {
   final ValueNotifier<List> cartFoods = ValueNotifier([]);
   final dalaFoods = [
     {
@@ -86,6 +93,8 @@ class _MyHomePageState extends State<MyHomePage> {
     },
   ];
 
+  RestorableString cartItems = RestorableString('[]');
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,6 +138,8 @@ class _MyHomePageState extends State<MyHomePage> {
                         setState(() {
                           cartFoods.value = List.from(cartFoods.value)
                             ..add(dalaFood);
+                          cartItems.value =
+                              jsonEncode(cartFoods.value).toString();
                         });
                       },
                       color: Colors.amber,
@@ -152,7 +163,11 @@ class _MyHomePageState extends State<MyHomePage> {
         builder: (context, value, child) {
           return FloatingActionButton.extended(
             onPressed: () {
-              final totalCosts = cartFoods.value.map((e) => e['cost']).toList();
+              final itemsOnCart = cartItems.value;
+
+              final myCart = jsonDecode(itemsOnCart) as List;
+
+              final totalCosts = myCart.map((e) => e['cost']).toList();
 
               double sum = totalCosts.fold(0, (a, b) => a + b);
 
@@ -167,19 +182,18 @@ class _MyHomePageState extends State<MyHomePage> {
                               child: ListView.builder(
                                 itemBuilder: (context, index) {
                                   return CupertinoListTile(
-                                    title:
-                                        Text(cartFoods.value[index]['title']),
-                                    subtitle: Text(
-                                        '${cartFoods.value[index]['cost']}Ksh.'),
+                                    title: Text(myCart[index]['title']),
+                                    subtitle:
+                                        Text('${myCart[index]['cost']}Ksh.'),
                                     leading: CachedNetworkImage(
-                                      imageUrl: cartFoods.value[index]['image'],
+                                      imageUrl: myCart[index]['image'],
                                       height: 45,
                                       width: double.infinity,
                                       fit: BoxFit.cover,
                                     ),
                                   );
                                 },
-                                itemCount: cartFoods.value.length,
+                                itemCount: myCart.length,
                               ),
                             ),
                             Text("Total Ksh $sum",
@@ -194,7 +208,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               onPressed: () {
                                 Navigator.pop(context);
 
-                                cartFoods.value.isNotEmpty
+                                cartItems.value.isNotEmpty
                                     ? QuickAlert.show(
                                         confirmBtnColor: Colors.cyan,
                                         context: context,
@@ -211,6 +225,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
                                 setState(() {
                                   cartFoods.value.clear();
+                                  cartItems.value = '[]';
                                 });
                               },
                               color: Colors.amber,
@@ -225,12 +240,21 @@ class _MyHomePageState extends State<MyHomePage> {
                       ));
             },
             tooltip: 'Checkout',
-            label: Text('Checkout (${value.length})'),
+            label: Text(
+                'Checkout (${(jsonDecode(cartItems.value) as List).length})'),
             icon: const Icon(Icons.shopping_basket),
           );
         },
       ),
       // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  @override
+  String get restorationId => 'dalafoods';
+
+  @override
+  void restoreState(RestorationBucket? oldBucket, bool initialRestore) {
+    registerForRestoration(cartItems, restorationId);
   }
 }
